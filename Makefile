@@ -1,12 +1,14 @@
+MIGRATE=./migrate
+DB_URL=postgres://root:secret@localhost:5432/sfp_db?sslmode=disable
+
 postgres:
 	docker run --name postgres12 -p 5432:5432 -e POSTGRES_USER=root -e POSTGRES_PASSWORD=secret -d postgres:12-alpine
 
 migrateup:
-	~/go/bin/migrate -path db/migration -database "postgres://root:secret@localhost:5432/sfp_db?sslmode=disable" -verbose up
-
+	$(MIGRATE) -path db/migration -database "$(DB_URL)" -verbose up
 
 migratedown:
-	~/go/bin/migrate path db/migration -database "postgres://root:secret@localhost:5432/sfp_db?ssl_mode=disable" -verbose down
+	$(MIGRATE) -path db/migration -database "$(DB_URL)" -verbose down
 
 sqlc:
 	sqlc generate

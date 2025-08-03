@@ -39,11 +39,13 @@ jobs:
       with:
         go-version: '1.24'
     
-    - name: Install golang migrate
+    - name: Download and set up golang-migrate
       run: |
         curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.linux-amd64.tar.gz | tar xvz
-        sudo mv migrate /usr/bin/
-        which migrate
+        mv migrate ./migrate
+        chmod +x ./migrate
+        ./migrate -version
+
 
 
     - name: Run migrations
