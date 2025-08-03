@@ -21,7 +21,6 @@ jobs:
           POSTGRES_USER: root
           POSTGRES_PASSWORD: secret
           POSTGRES_DB: sfp_db
-
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -42,6 +41,12 @@ jobs:
         sudo mv migrate /usr/bin/
         which migrate
 
+    - name: Wait for PostgreSQL to be ready
+      run: |
+        until docker exec postgres pg_isready -U root -d sfp_db; do
+          echo "Waiting for PostgreSQL to be ready..."
+          sleep 2
+        done
 
     - name: Run migrations
       run: migrate -path db/migration -database "postgres://root:secret@postgres:5432/sfp_db?sslmode=disable" -verbose up
