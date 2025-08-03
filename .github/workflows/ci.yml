@@ -49,7 +49,7 @@ jobs:
         done
 
     - name: Run migrations
-      run: migrate -path db/migration -database "postgres://root:secret@postgres:5432/sfp_db?sslmode=disable" -verbose up
+      run: migrate -path db/migration -database "postgres://root:secret@postgres12:5432/sfp_db?sslmode=disable" -verbose up
 
     - name: Test
       run: make test
