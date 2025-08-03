@@ -16,7 +16,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:12
+        image: postgres/postgres:12
         env:
           POSTGRES_USER: root
           POSTGRES_PASSWORD: secret
@@ -45,12 +45,6 @@ jobs:
         sudo mv migrate /usr/bin/
         which migrate
 
-    - name: Wait for PostgreSQL to be ready
-      run: |
-        until docker exec postgres12 pg_isready -U root -d sfp_db; do
-          echo "Waiting for PostgreSQL to be ready..."
-          sleep 2
-        done
 
     - name: Run migrations
       run: make migrateup
