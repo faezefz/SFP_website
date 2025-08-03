@@ -43,7 +43,7 @@ jobs:
 
     - name: Wait for PostgreSQL to be ready
       run: |
-        until docker exec postgres12 pg_isready -U root -d sfp_db; do
+        until pg_isready -h postgres -U root -d sfp_db; do
           echo "Waiting for PostgreSQL to be ready..."
           sleep 2
         done
