@@ -119,6 +119,39 @@ func (q *Queries) ListDatasets(ctx context.Context, arg ListDatasetsParams) ([]D
 	return items, nil
 }
 
+const listDatasetsByUserID = `-- name: ListDatasetsByUserID :many
+SELECT id, user_id, name, description, file_path, uploaded_at FROM datasets
+WHERE user_id = $1
+ORDER BY uploaded_at DESC
+`
+
+func (q *Queries) ListDatasetsByUserID(ctx context.Context, userID pgtype.Int4) ([]Dataset, error) {
+	rows, err := q.db.Query(ctx, listDatasetsByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Dataset
+	for rows.Next() {
+		var i Dataset
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.Description,
+			&i.FilePath,
+			&i.UploadedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateDataset = `-- name: UpdateDataset :one
 UPDATE datasets
   SET name = $2,

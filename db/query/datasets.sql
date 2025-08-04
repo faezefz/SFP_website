@@ -20,6 +20,11 @@ ORDER BY id
 LIMIT $2
 OFFSET $3;
 
+-- name: ListDatasetsByUserID :many
+SELECT * FROM datasets
+WHERE user_id = $1
+ORDER BY uploaded_at DESC;
+
 -- name: UpdateDataset :one
 UPDATE datasets
   SET name = $2,
