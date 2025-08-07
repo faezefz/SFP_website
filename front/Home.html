@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home</title>
+</head>
+<body>
+  <div id="home">
+    <h1>Welcome to our website!</h1>
+  </div>
+
+  <script>
+    window.onload = function() {
+      const token = localStorage.getItem('token'); // بررسی توکن در localStorage
+
+      if (token) {
+        // اگر توکن موجود باشد، کاربر را به داشبورد هدایت می‌کنیم
+        window.location.href = '/dashboard.html'; // یا هر URL مناسب
+      } else {
+        // در غیر این صورت، کاربر را به صفحه ورود هدایت می‌کنیم
+        window.location.href = '/login.html'; // یا هر URL مناسب
+      }
+    }
+  </script>
+</body>
+</html>

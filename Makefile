@@ -16,10 +16,13 @@ sqlc:
 test:
 	go test -v -cover ./...
 
+server:
+	go run main.go
+
 createdb:
 	docker exec -it postgres12 createdb --username=root --owner=root sfp_db
 
 dropdb:
 	docker exec -it postgres12 dropdb sfp_db
 
-.PHONY: postgres migrateup migratedown createdb dropdb sqlc test
+.PHONY: postgres migrateup migratedown createdb dropdb sqlc test server

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -15,32 +16,35 @@ import (
 
 // Server struct
 type Server struct {
-	db     *db.Queries
-	router *gin.Engine
-	secret string
+	Db     *db.Queries // فیلد db هم می‌تواند exported باشد (اگر نیاز به دسترسی از خارج پکیج است)
+	Router *gin.Engine // تغییر از router به Router (با حرف بزرگ)
+	Secret string
 }
 
 // NewServer
 func NewServer(dbPool *pgxpool.Pool, secret string) *Server {
 	server := &Server{
-		db:     db.New(dbPool),
-		router: gin.Default(),
-		secret: secret,
+		Db:     db.New(dbPool),
+		Router: gin.Default(),
+		Secret: secret,
 	}
 
-	server.routes()
+	server.Routes()
 
 	return server
 }
 
 // routes
-func (s *Server) routes() {
-	s.router.POST("/signup", s.signup)
-	s.router.POST("/login", s.login)
+func (s *Server) Routes() {
+	s.Router.GET("/", s.home)
 
-	auth := s.router.Group("/")
+	s.Router.POST("/signup", s.signup)
+	s.Router.POST("/login", s.login)
+
+	auth := s.Router.Group("/")
 	auth.Use(s.authMiddleware())
 	{
+		auth.GET("/dashboard/:id", s.userDashboard) // تغییر برای دریافت :id از URI
 		auth.POST("/datasets", s.uploadDataset)
 		auth.GET("/datasets", s.listDatasets)
 		// سایر روت‌ها: مدل‌ها، پیش‌بینی‌ها و غیره می‌توان اضافه کرد
@@ -49,7 +53,38 @@ func (s *Server) routes() {
 
 // Run
 func (s *Server) Run(addr string) error {
-	return s.router.Run(addr)
+	return s.Router.Run(addr)
+}
+
+// home
+func (s *Server) home(c *gin.Context) {
+	tokenString := c.GetHeader("Authorization") // گرفتن توکن از هدر درخواست
+
+	if tokenString == "" {
+		// اگر توکن موجود نباشد، کاربر را به صفحه ورود هدایت می‌کنیم
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Please log in first."})
+		return
+	}
+
+	// بررسی صحت توکن
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.Secret), nil
+	})
+
+	if err != nil || !token.Valid {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token. Please log in again."})
+		return
+	}
+
+	// اگر توکن معتبر باشد، به داشبورد هدایت می‌شود
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token claims."})
+		return
+	}
+
+	userID := claims["user_id"].(float64)
+	c.Redirect(http.StatusFound, fmt.Sprintf("/dashboard/%d", int(userID)))
 }
 
 // signup
@@ -78,7 +113,7 @@ func (s *Server) signup(c *gin.Context) {
 		FullName:     pgtype.Text{String: req.FullName, Valid: req.FullName != ""},
 	}
 
-	user, err := s.db.CreateUser(context.Background(), arg)
+	user, err := s.Db.CreateUser(context.Background(), arg)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
@@ -100,7 +135,7 @@ func (s *Server) login(c *gin.Context) {
 		return
 	}
 
-	user, err := s.db.GetUserByEmail(context.Background(), req.Email)
+	user, err := s.Db.GetUserByEmail(context.Background(), req.Email)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
@@ -118,7 +153,7 @@ func (s *Server) login(c *gin.Context) {
 		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 	})
 
-	tokenString, err := token.SignedString([]byte(s.secret))
+	tokenString, err := token.SignedString([]byte(s.Secret))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
@@ -145,7 +180,7 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 		tokenString := authHeader[len(prefix):]
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			return []byte(s.secret), nil
+			return []byte(s.Secret), nil
 		})
 		if err != nil || !token.Valid {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
@@ -207,7 +242,7 @@ func (s *Server) uploadDataset(c *gin.Context) {
 		FilePath: req.FilePath,
 	}
 
-	dataset, err := s.db.CreateDataset(context.Background(), arg)
+	dataset, err := s.Db.CreateDataset(context.Background(), arg)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create dataset"})
 		return
@@ -230,11 +265,46 @@ func (s *Server) listDatasets(c *gin.Context) {
 		return
 	}
 	userIDParam := pgtype.Int4{Int32: userID, Valid: true}
-	datasets, err := s.db.ListDatasetsByUserID(context.Background(), userIDParam)
+	datasets, err := s.Db.ListDatasetsByUserID(context.Background(), userIDParam)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch datasets"})
 		return
 	}
 
 	c.JSON(http.StatusOK, datasets)
+}
+
+// dashboard
+type dashboardRequest struct {
+	ID pgtype.Int4 `uri:"id" binding:"required"`
+}
+
+func (s *Server) userDashboard(c *gin.Context) {
+	var req dashboardRequest
+
+	// دریافت پارامترهای URI
+	if err := c.ShouldBindUri(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID in URL"})
+		return
+	}
+
+	// پر کردن Int4 با مقدار id
+	userID := req.ID.Int32
+	if !req.ID.Valid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	datasets, err := s.Db.ListDatasetsByUserID(context.Background(), pgtype.Int4{Int32: userID, Valid: true})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch datasets"})
+		return
+	}
+
+	// ارسال اطلاعات پروفایل یا داشبورد
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Welcome to your dashboard",
+		"user_id":  userID,
+		"datasets": datasets,
+	})
 }
