@@ -4,9 +4,10 @@ INSERT INTO predictions (
   dataset_id,
   model_id,
   result_file_path,
-  status
+  status,
+  project_id         
 ) VALUES (
-  $1, $2, $3, $4, $5
+  $1, $2, $3, $4, $5, $6
 )
 RETURNING *;
 
@@ -31,3 +32,15 @@ RETURNING *;
 -- name: DeletePrediction :exec
 DELETE FROM predictions
 WHERE id = $1;
+
+-- name: ListPredictionsByProject :many
+SELECT * FROM predictions
+WHERE project_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: ListPredictionsByProjectAndStatus :many
+SELECT * FROM predictions
+WHERE project_id = $1 AND status = $2
+ORDER BY created_at DESC
+LIMIT $3 OFFSET $4;
