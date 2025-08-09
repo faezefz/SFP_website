@@ -2,31 +2,28 @@ package api
 
 import (
 	"context"
-	"fmt"
+	_ "fmt"
+	"log"
 	"net/http"
-	"time"
 
 	db "github.com/faezefz/SFP_website/db/sqlc"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Server struct
 type Server struct {
 	Db     *db.Queries // فیلد db هم می‌تواند exported باشد (اگر نیاز به دسترسی از خارج پکیج است)
 	Router *gin.Engine // تغییر از router به Router (با حرف بزرگ)
-	Secret string
 }
 
 // NewServer
-func NewServer(dbPool *pgxpool.Pool, secret string) *Server {
+func NewServer(dbPool *pgxpool.Pool) *Server {
 	server := &Server{
 		Db:     db.New(dbPool),
 		Router: gin.Default(),
-		Secret: secret,
 	}
 
 	server.Routes()
@@ -36,18 +33,21 @@ func NewServer(dbPool *pgxpool.Pool, secret string) *Server {
 
 // routes
 func (s *Server) Routes() {
-	s.Router.GET("/", s.home)
+	// فعال‌سازی CORS برای همه روت‌ها
+	s.Router.Use(cors.Default()) // استفاده از تنظیمات پیش‌فرض CORS
 
-	s.Router.POST("/signup", s.signup)
-	s.Router.POST("/login", s.login)
+	// مسیرهایی که نیازی به احراز هویت ندارند:
+	s.Router.GET("/", s.home)          // صفحه اصلی
+	s.Router.POST("/login", s.login)   // صفحه ورود
+	s.Router.POST("/signup", s.signup) // ثبت‌نام
 
+	// این گروه فقط برای مسیرهایی که نیاز به احراز هویت دارند:
 	auth := s.Router.Group("/")
-	auth.Use(s.authMiddleware())
+	auth.Use(s.authMiddleware()) // فقط این گروه به احراز هویت نیاز دارد
 	{
-		auth.GET("/dashboard/:id", s.userDashboard) // تغییر برای دریافت :id از URI
-		auth.POST("/datasets", s.uploadDataset)
-		auth.GET("/datasets", s.listDatasets)
-		// سایر روت‌ها: مدل‌ها، پیش‌بینی‌ها و غیره می‌توان اضافه کرد
+		auth.GET("/dashboard/:id", s.userDashboard) // صفحه داشبورد
+		auth.POST("/datasets", s.uploadDataset)     // آپلود داده
+		auth.GET("/datasets", s.listDatasets)       // نمایش داده‌ها
 	}
 }
 
@@ -58,33 +58,10 @@ func (s *Server) Run(addr string) error {
 
 // home
 func (s *Server) home(c *gin.Context) {
-	tokenString := c.GetHeader("Authorization") // گرفتن توکن از هدر درخواست
-
-	if tokenString == "" {
-		// اگر توکن موجود نباشد، کاربر را به صفحه ورود هدایت می‌کنیم
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Please log in first."})
-		return
-	}
-
-	// بررسی صحت توکن
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		return []byte(s.Secret), nil
+	// ارسال یک پاسخ JSON به فلاتر
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Welcome to the API, please use /login or /signup.",
 	})
-
-	if err != nil || !token.Valid {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token. Please log in again."})
-		return
-	}
-
-	// اگر توکن معتبر باشد، به داشبورد هدایت می‌شود
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token claims."})
-		return
-	}
-
-	userID := claims["user_id"].(float64)
-	c.Redirect(http.StatusFound, fmt.Sprintf("/dashboard/%d", int(userID)))
 }
 
 // signup
@@ -101,20 +78,16 @@ func (s *Server) signup(c *gin.Context) {
 		return
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
-		return
-	}
-
+	// ذخیره‌سازی پسورد بدون هش کردن
 	arg := db.CreateUserParams{
 		Email:        req.Email,
-		PasswordHash: string(hashedPassword),
+		PasswordHash: req.Password, // ذخیره‌سازی پسورد بدون هش کردن
 		FullName:     pgtype.Text{String: req.FullName, Valid: req.FullName != ""},
 	}
 
 	user, err := s.Db.CreateUser(context.Background(), arg)
 	if err != nil {
+		log.Printf("Error creating user: %v", arg.Email)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
@@ -131,94 +104,38 @@ func (s *Server) login(c *gin.Context) {
 
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid data format or missing fields"})
 		return
 	}
 
+	// جستجو برای کاربر در دیتابیس
 	user, err := s.Db.GetUserByEmail(context.Background(), req.Email)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password))
-	if err != nil {
+	// مقایسه پسورد وارد شده با پسورد ذخیره شده (بدون هش)
+	if user.PasswordHash != req.Password {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// JWT
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": user.ID,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(),
-	})
-
-	tokenString, err := token.SignedString([]byte(s.Secret))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"token": tokenString})
+	// لاگین موفق، فقط پیام تایید باز می‌گردد
+	c.JSON(http.StatusOK, gin.H{"user_id": user.ID})
 }
 
 // authMiddleware
 func (s *Server) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing Authorization header"})
-			return
-		}
-
-		const prefix = "Bearer "
-		if len(authHeader) <= len(prefix) || authHeader[:len(prefix)] != prefix {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid Authorization header format"})
-			return
-		}
-
-		tokenString := authHeader[len(prefix):]
-
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			return []byte(s.Secret), nil
-		})
-		if err != nil || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-			return
-		}
-
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
-			return
-		}
-
-		userID, ok := claims["user_id"].(float64)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user_id in token"})
-			return
-		}
-
-		c.Set("user_id", int32(userID))
-
+		// هیچ احراز هویتی برای این مسیرها لازم نیست
 		c.Next()
 	}
 }
 
 // uploadDataset
 func (s *Server) uploadDataset(c *gin.Context) {
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
-		return
-	}
-
-	userID, ok := userIDInterface.(int32)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "User ID has invalid type"})
-		return
-	}
-
+	// برای سادگی، ما نیازی به احراز هویت نداریم
 	type uploadRequest struct {
 		Name        string `json:"name" binding:"required"`
 		Description string `json:"description"`
@@ -232,8 +149,9 @@ func (s *Server) uploadDataset(c *gin.Context) {
 		return
 	}
 
+	userID, _ := c.Get("user_id") // به سادگی، از اطلاعات کاربر موجود استفاده می‌کنیم
 	arg := db.CreateDatasetParams{
-		UserID: pgtype.Int4{Int32: userID, Valid: true},
+		UserID: pgtype.Int4{Int32: userID.(int32), Valid: true},
 		Name:   req.Name,
 		Description: pgtype.Text{
 			String: req.Description,
@@ -253,18 +171,9 @@ func (s *Server) uploadDataset(c *gin.Context) {
 
 // listDatasets
 func (s *Server) listDatasets(c *gin.Context) {
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
-		return
-	}
-
-	userID, ok := userIDInterface.(int32)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "User ID has invalid type"})
-		return
-	}
-	userIDParam := pgtype.Int4{Int32: userID, Valid: true}
+	// به سادگی داده‌ها را نمایش می‌دهیم
+	userID, _ := c.Get("user_id")
+	userIDParam := pgtype.Int4{Int32: userID.(int32), Valid: true}
 	datasets, err := s.Db.ListDatasetsByUserID(context.Background(), userIDParam)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch datasets"})

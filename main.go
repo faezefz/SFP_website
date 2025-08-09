@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 	"log"
-	_ "net/http"
 
 	"github.com/faezefz/SFP_website/api"
-	_ "github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -28,7 +26,10 @@ func main() {
 	}
 
 	// ایجاد سرور
-	server := api.NewServer(dbPool, "secret")
+	server := api.NewServer(dbPool)
+
+	// بارگذاری HTML حذف شد، چون فلاتر به طور مستقل عمل می‌کند
+	// server.Router.LoadHTMLGlob("templates/*")
 
 	// راه‌اندازی سرور
 	if err := server.Run(":8080"); err != nil {

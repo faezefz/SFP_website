@@ -19,7 +19,7 @@ INSERT INTO logs (
 ) VALUES (
   $1, $2, $3
 )
-RETURNING id, user_id, action, details, created_at
+RETURNING id, user_id, action, details, created_at, project_id
 `
 
 type CreateLogParams struct {
@@ -37,6 +37,7 @@ func (q *Queries) CreateLog(ctx context.Context, arg CreateLogParams) (Log, erro
 		&i.Action,
 		&i.Details,
 		&i.CreatedAt,
+		&i.ProjectID,
 	)
 	return i, err
 }
@@ -52,7 +53,7 @@ func (q *Queries) DeleteLog(ctx context.Context, id int32) error {
 }
 
 const getLog = `-- name: GetLog :one
-SELECT id, user_id, action, details, created_at FROM logs
+SELECT id, user_id, action, details, created_at, project_id FROM logs
 WHERE id = $1 LIMIT 1
 `
 
@@ -65,12 +66,13 @@ func (q *Queries) GetLog(ctx context.Context, id int32) (Log, error) {
 		&i.Action,
 		&i.Details,
 		&i.CreatedAt,
+		&i.ProjectID,
 	)
 	return i, err
 }
 
 const listLogs = `-- name: ListLogs :many
-SELECT id, user_id, action, details, created_at FROM logs
+SELECT id, user_id, action, details, created_at, project_id FROM logs
 WHERE user_id = $1
 ORDER BY id
 LIMIT $2
@@ -98,6 +100,7 @@ func (q *Queries) ListLogs(ctx context.Context, arg ListLogsParams) ([]Log, erro
 			&i.Action,
 			&i.Details,
 			&i.CreatedAt,
+			&i.ProjectID,
 		); err != nil {
 			return nil, err
 		}

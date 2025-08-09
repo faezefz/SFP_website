@@ -21,7 +21,7 @@ INSERT INTO predictions (
 ) VALUES (
   $1, $2, $3, $4, $5
 )
-RETURNING id, user_id, dataset_id, model_id, result_file_path, status, created_at
+RETURNING id, user_id, dataset_id, model_id, result_file_path, status, created_at, project_id
 `
 
 type CreatePredictionParams struct {
@@ -49,6 +49,7 @@ func (q *Queries) CreatePrediction(ctx context.Context, arg CreatePredictionPara
 		&i.ResultFilePath,
 		&i.Status,
 		&i.CreatedAt,
+		&i.ProjectID,
 	)
 	return i, err
 }
@@ -64,7 +65,7 @@ func (q *Queries) DeletePrediction(ctx context.Context, id int32) error {
 }
 
 const getPrediction = `-- name: GetPrediction :one
-SELECT id, user_id, dataset_id, model_id, result_file_path, status, created_at FROM predictions
+SELECT id, user_id, dataset_id, model_id, result_file_path, status, created_at, project_id FROM predictions
 WHERE id = $1 LIMIT 1
 `
 
@@ -79,12 +80,13 @@ func (q *Queries) GetPrediction(ctx context.Context, id int32) (Prediction, erro
 		&i.ResultFilePath,
 		&i.Status,
 		&i.CreatedAt,
+		&i.ProjectID,
 	)
 	return i, err
 }
 
 const listPredictions = `-- name: ListPredictions :many
-SELECT id, user_id, dataset_id, model_id, result_file_path, status, created_at FROM predictions
+SELECT id, user_id, dataset_id, model_id, result_file_path, status, created_at, project_id FROM predictions
 WHERE user_id = $1
 ORDER BY id
 LIMIT $2
@@ -114,6 +116,7 @@ func (q *Queries) ListPredictions(ctx context.Context, arg ListPredictionsParams
 			&i.ResultFilePath,
 			&i.Status,
 			&i.CreatedAt,
+			&i.ProjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -130,7 +133,7 @@ UPDATE predictions
   SET result_file_path = $2,
       status = $3
 WHERE id = $1
-RETURNING id, user_id, dataset_id, model_id, result_file_path, status, created_at
+RETURNING id, user_id, dataset_id, model_id, result_file_path, status, created_at, project_id
 `
 
 type UpdatePredictionParams struct {
@@ -150,6 +153,7 @@ func (q *Queries) UpdatePrediction(ctx context.Context, arg UpdatePredictionPara
 		&i.ResultFilePath,
 		&i.Status,
 		&i.CreatedAt,
+		&i.ProjectID,
 	)
 	return i, err
 }

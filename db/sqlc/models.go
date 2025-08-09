@@ -23,6 +23,7 @@ type Log struct {
 	Action    pgtype.Text      `json:"action"`
 	Details   pgtype.Text      `json:"details"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
+	ProjectID pgtype.Int4      `json:"project_id"`
 }
 
 type Model struct {
@@ -43,6 +44,28 @@ type Prediction struct {
 	ResultFilePath pgtype.Text      `json:"result_file_path"`
 	Status         pgtype.Text      `json:"status"`
 	CreatedAt      pgtype.Timestamp `json:"created_at"`
+	ProjectID      pgtype.Int4      `json:"project_id"`
+}
+
+type Project struct {
+	ID          int32            `json:"id"`
+	OwnerUserID int32            `json:"owner_user_id"`
+	Name        string           `json:"name"`
+	Description pgtype.Text      `json:"description"`
+	Visibility  pgtype.Text      `json:"visibility"`
+	CreatedAt   pgtype.Timestamp `json:"created_at"`
+}
+
+type ProjectDataset struct {
+	ProjectID int32            `json:"project_id"`
+	DatasetID int32            `json:"dataset_id"`
+	AddedAt   pgtype.Timestamp `json:"added_at"`
+}
+
+type ProjectModel struct {
+	ProjectID int32            `json:"project_id"`
+	ModelID   int32            `json:"model_id"`
+	AddedAt   pgtype.Timestamp `json:"added_at"`
 }
 
 type User struct {
