@@ -12,7 +12,6 @@ import (
 const addModelToProject = `-- name: AddModelToProject :exec
 INSERT INTO project_models (project_id, model_id)
 VALUES ($1, $2)
-ON CONFLICT (project_id, model_id) DO NOTHING
 `
 
 type AddModelToProjectParams struct {
@@ -25,16 +24,15 @@ func (q *Queries) AddModelToProject(ctx context.Context, arg AddModelToProjectPa
 	return err
 }
 
-const listProjectModels = `-- name: ListProjectModels :many
+const getModelsByProjectID = `-- name: GetModelsByProjectID :many
 SELECT m.id, m.user_id, m.name, m.description, m.model_type, m.file_path, m.created_at
-FROM project_models pm
-JOIN models m ON m.id = pm.model_id
+FROM models m
+JOIN project_models pm ON m.id = pm.model_id
 WHERE pm.project_id = $1
-ORDER BY m.created_at DESC
 `
 
-func (q *Queries) ListProjectModels(ctx context.Context, projectID int32) ([]Model, error) {
-	rows, err := q.db.Query(ctx, listProjectModels, projectID)
+func (q *Queries) GetModelsByProjectID(ctx context.Context, projectID int32) ([]Model, error) {
+	rows, err := q.db.Query(ctx, getModelsByProjectID, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +60,8 @@ func (q *Queries) ListProjectModels(ctx context.Context, projectID int32) ([]Mod
 }
 
 const removeModelFromProject = `-- name: RemoveModelFromProject :exec
-DELETE FROM project_models WHERE project_id = $1 AND model_id = $2
+DELETE FROM project_models
+WHERE project_id = $1 AND model_id = $2
 `
 
 type RemoveModelFromProjectParams struct {

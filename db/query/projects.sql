@@ -1,22 +1,18 @@
 -- name: CreateProject :one
-INSERT INTO projects (owner_user_id, name, description, visibility)
-VALUES ($1, $2, $3, COALESCE($4, 'private'))
+INSERT INTO projects (owner_user_id, name, description)
+VALUES ($1, $2, $3)
 RETURNING *;
 
--- name: GetProject :one
+-- name: GetProjectByID :one
 SELECT * FROM projects WHERE id = $1 LIMIT 1;
 
--- name: ListProjectsByOwner :many
-SELECT * FROM projects
-WHERE owner_user_id = $1
-ORDER BY created_at DESC
-LIMIT $2 OFFSET $3;
+-- name: GetProjectsByOwnerID :many
+SELECT * FROM projects WHERE owner_user_id = $1 ORDER BY id;
 
 -- name: UpdateProject :one
 UPDATE projects
-SET name = COALESCE($2, name),
-    description = COALESCE($3, description),
-    visibility = COALESCE($4, visibility)
+SET name = $2,
+    description = $3
 WHERE id = $1
 RETURNING *;
 

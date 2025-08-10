@@ -12,8 +12,8 @@ import (
 )
 
 const createProject = `-- name: CreateProject :one
-INSERT INTO projects (owner_user_id, name, description, visibility)
-VALUES ($1, $2, $3, COALESCE($4, 'private'))
+INSERT INTO projects (owner_user_id, name, description)
+VALUES ($1, $2, $3)
 RETURNING id, owner_user_id, name, description, visibility, created_at
 `
 
@@ -21,16 +21,10 @@ type CreateProjectParams struct {
 	OwnerUserID int32       `json:"owner_user_id"`
 	Name        string      `json:"name"`
 	Description pgtype.Text `json:"description"`
-	Column4     interface{} `json:"column_4"`
 }
 
 func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {
-	row := q.db.QueryRow(ctx, createProject,
-		arg.OwnerUserID,
-		arg.Name,
-		arg.Description,
-		arg.Column4,
-	)
+	row := q.db.QueryRow(ctx, createProject, arg.OwnerUserID, arg.Name, arg.Description)
 	var i Project
 	err := row.Scan(
 		&i.ID,
@@ -52,12 +46,12 @@ func (q *Queries) DeleteProject(ctx context.Context, id int32) error {
 	return err
 }
 
-const getProject = `-- name: GetProject :one
+const getProjectByID = `-- name: GetProjectByID :one
 SELECT id, owner_user_id, name, description, visibility, created_at FROM projects WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetProject(ctx context.Context, id int32) (Project, error) {
-	row := q.db.QueryRow(ctx, getProject, id)
+func (q *Queries) GetProjectByID(ctx context.Context, id int32) (Project, error) {
+	row := q.db.QueryRow(ctx, getProjectByID, id)
 	var i Project
 	err := row.Scan(
 		&i.ID,
@@ -70,21 +64,12 @@ func (q *Queries) GetProject(ctx context.Context, id int32) (Project, error) {
 	return i, err
 }
 
-const listProjectsByOwner = `-- name: ListProjectsByOwner :many
-SELECT id, owner_user_id, name, description, visibility, created_at FROM projects
-WHERE owner_user_id = $1
-ORDER BY created_at DESC
-LIMIT $2 OFFSET $3
+const getProjectsByOwnerID = `-- name: GetProjectsByOwnerID :many
+SELECT id, owner_user_id, name, description, visibility, created_at FROM projects WHERE owner_user_id = $1 ORDER BY id
 `
 
-type ListProjectsByOwnerParams struct {
-	OwnerUserID int32 `json:"owner_user_id"`
-	Limit       int32 `json:"limit"`
-	Offset      int32 `json:"offset"`
-}
-
-func (q *Queries) ListProjectsByOwner(ctx context.Context, arg ListProjectsByOwnerParams) ([]Project, error) {
-	rows, err := q.db.Query(ctx, listProjectsByOwner, arg.OwnerUserID, arg.Limit, arg.Offset)
+func (q *Queries) GetProjectsByOwnerID(ctx context.Context, ownerUserID int32) ([]Project, error) {
+	rows, err := q.db.Query(ctx, getProjectsByOwnerID, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,9 +97,8 @@ func (q *Queries) ListProjectsByOwner(ctx context.Context, arg ListProjectsByOwn
 
 const updateProject = `-- name: UpdateProject :one
 UPDATE projects
-SET name = COALESCE($2, name),
-    description = COALESCE($3, description),
-    visibility = COALESCE($4, visibility)
+SET name = $2,
+    description = $3
 WHERE id = $1
 RETURNING id, owner_user_id, name, description, visibility, created_at
 `
@@ -123,16 +107,10 @@ type UpdateProjectParams struct {
 	ID          int32       `json:"id"`
 	Name        string      `json:"name"`
 	Description pgtype.Text `json:"description"`
-	Visibility  pgtype.Text `json:"visibility"`
 }
 
 func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error) {
-	row := q.db.QueryRow(ctx, updateProject,
-		arg.ID,
-		arg.Name,
-		arg.Description,
-		arg.Visibility,
-	)
+	row := q.db.QueryRow(ctx, updateProject, arg.ID, arg.Name, arg.Description)
 	var i Project
 	err := row.Scan(
 		&i.ID,

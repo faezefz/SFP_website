@@ -12,15 +12,8 @@ import (
 )
 
 const createModel = `-- name: CreateModel :one
-INSERT INTO models (
-  user_id,
-  name,
-  description,
-  model_type,
-  file_path
-) VALUES (
-  $1, $2, $3, $4, $5
-)
+INSERT INTO models (user_id, name, description, file_path)
+VALUES ($1, $2, $3, $4)
 RETURNING id, user_id, name, description, model_type, file_path, created_at
 `
 
@@ -28,7 +21,6 @@ type CreateModelParams struct {
 	UserID      pgtype.Int4 `json:"user_id"`
 	Name        string      `json:"name"`
 	Description pgtype.Text `json:"description"`
-	ModelType   pgtype.Text `json:"model_type"`
 	FilePath    string      `json:"file_path"`
 }
 
@@ -37,7 +29,6 @@ func (q *Queries) CreateModel(ctx context.Context, arg CreateModelParams) (Model
 		arg.UserID,
 		arg.Name,
 		arg.Description,
-		arg.ModelType,
 		arg.FilePath,
 	)
 	var i Model
@@ -54,8 +45,7 @@ func (q *Queries) CreateModel(ctx context.Context, arg CreateModelParams) (Model
 }
 
 const deleteModel = `-- name: DeleteModel :exec
-DELETE FROM models
-WHERE id = $1
+DELETE FROM models WHERE id = $1
 `
 
 func (q *Queries) DeleteModel(ctx context.Context, id int32) error {
@@ -63,13 +53,12 @@ func (q *Queries) DeleteModel(ctx context.Context, id int32) error {
 	return err
 }
 
-const getModel = `-- name: GetModel :one
-SELECT id, user_id, name, description, model_type, file_path, created_at FROM models
-WHERE id = $1 LIMIT 1
+const getModelByID = `-- name: GetModelByID :one
+SELECT id, user_id, name, description, model_type, file_path, created_at FROM models WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetModel(ctx context.Context, id int32) (Model, error) {
-	row := q.db.QueryRow(ctx, getModel, id)
+func (q *Queries) GetModelByID(ctx context.Context, id int32) (Model, error) {
+	row := q.db.QueryRow(ctx, getModelByID, id)
 	var i Model
 	err := row.Scan(
 		&i.ID,
@@ -83,22 +72,12 @@ func (q *Queries) GetModel(ctx context.Context, id int32) (Model, error) {
 	return i, err
 }
 
-const listModels = `-- name: ListModels :many
-SELECT id, user_id, name, description, model_type, file_path, created_at FROM models
-WHERE user_id = $1
-ORDER BY id
-LIMIT $2
-OFFSET $3
+const getModelsByUserID = `-- name: GetModelsByUserID :many
+SELECT id, user_id, name, description, model_type, file_path, created_at FROM models WHERE user_id = $1 ORDER BY id
 `
 
-type ListModelsParams struct {
-	UserID pgtype.Int4 `json:"user_id"`
-	Limit  int32       `json:"limit"`
-	Offset int32       `json:"offset"`
-}
-
-func (q *Queries) ListModels(ctx context.Context, arg ListModelsParams) ([]Model, error) {
-	rows, err := q.db.Query(ctx, listModels, arg.UserID, arg.Limit, arg.Offset)
+func (q *Queries) GetModelsByUserID(ctx context.Context, userID pgtype.Int4) ([]Model, error) {
+	rows, err := q.db.Query(ctx, getModelsByUserID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -127,10 +106,10 @@ func (q *Queries) ListModels(ctx context.Context, arg ListModelsParams) ([]Model
 
 const updateModel = `-- name: UpdateModel :one
 UPDATE models
-  SET name = $2,
-      description = $3,
-      model_type = $4,
-      file_path = $5
+SET name = $2,
+    description = $3,
+    file_path = $4,
+    updated_at = NOW()
 WHERE id = $1
 RETURNING id, user_id, name, description, model_type, file_path, created_at
 `
@@ -139,7 +118,6 @@ type UpdateModelParams struct {
 	ID          int32       `json:"id"`
 	Name        string      `json:"name"`
 	Description pgtype.Text `json:"description"`
-	ModelType   pgtype.Text `json:"model_type"`
 	FilePath    string      `json:"file_path"`
 }
 
@@ -148,7 +126,6 @@ func (q *Queries) UpdateModel(ctx context.Context, arg UpdateModelParams) (Model
 		arg.ID,
 		arg.Name,
 		arg.Description,
-		arg.ModelType,
 		arg.FilePath,
 	)
 	var i Model

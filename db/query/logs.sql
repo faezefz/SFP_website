@@ -1,36 +1,15 @@
 -- name: CreateLog :one
-INSERT INTO logs (
-  user_id,
-  action,
-  details
-) VALUES (
-  $1, $2, $3
-)
-RETURNING *;
-
--- name: CreateProjectLog :one
-INSERT INTO logs (user_id, action, details, project_id)
+INSERT INTO logs (user_id, project_id, action, details)
 VALUES ($1, $2, $3, $4)
 RETURNING *;
 
--- name: ListLogsByProject :many
-SELECT * FROM logs
-WHERE project_id = $1
-ORDER BY created_at DESC
-LIMIT $2 OFFSET $3;
+-- name: GetLogByID :one
+SELECT * FROM logs WHERE id = $1 LIMIT 1;
 
-
--- name: GetLog :one
+-- name: GetLogsByProjectOrUser :many
 SELECT * FROM logs
-WHERE id = $1 LIMIT 1;
-
--- name: ListLogs :many
-SELECT * FROM logs
-WHERE user_id = $1
-ORDER BY id
-LIMIT $2
-OFFSET $3;
+WHERE project_id = $1 OR user_id = $2
+ORDER BY created_at DESC;
 
 -- name: DeleteLog :exec
-DELETE FROM logs
-WHERE id = $1;
+DELETE FROM logs WHERE id = $1;

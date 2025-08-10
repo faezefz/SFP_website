@@ -12,7 +12,6 @@ import (
 const addDatasetToProject = `-- name: AddDatasetToProject :exec
 INSERT INTO project_datasets (project_id, dataset_id)
 VALUES ($1, $2)
-ON CONFLICT (project_id, dataset_id) DO NOTHING
 `
 
 type AddDatasetToProjectParams struct {
@@ -25,16 +24,15 @@ func (q *Queries) AddDatasetToProject(ctx context.Context, arg AddDatasetToProje
 	return err
 }
 
-const listProjectDatasets = `-- name: ListProjectDatasets :many
+const getDatasetsByProjectID = `-- name: GetDatasetsByProjectID :many
 SELECT d.id, d.user_id, d.name, d.description, d.file_path, d.uploaded_at
-FROM project_datasets pd
-JOIN datasets d ON d.id = pd.dataset_id
+FROM datasets d
+JOIN project_datasets pd ON d.id = pd.dataset_id
 WHERE pd.project_id = $1
-ORDER BY d.uploaded_at DESC
 `
 
-func (q *Queries) ListProjectDatasets(ctx context.Context, projectID int32) ([]Dataset, error) {
-	rows, err := q.db.Query(ctx, listProjectDatasets, projectID)
+func (q *Queries) GetDatasetsByProjectID(ctx context.Context, projectID int32) ([]Dataset, error) {
+	rows, err := q.db.Query(ctx, getDatasetsByProjectID, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +59,8 @@ func (q *Queries) ListProjectDatasets(ctx context.Context, projectID int32) ([]D
 }
 
 const removeDatasetFromProject = `-- name: RemoveDatasetFromProject :exec
-DELETE FROM project_datasets WHERE project_id = $1 AND dataset_id = $2
+DELETE FROM project_datasets
+WHERE project_id = $1 AND dataset_id = $2
 `
 
 type RemoveDatasetFromProjectParams struct {

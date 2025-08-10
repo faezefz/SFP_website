@@ -12,55 +12,24 @@ import (
 )
 
 const createLog = `-- name: CreateLog :one
-INSERT INTO logs (
-  user_id,
-  action,
-  details
-) VALUES (
-  $1, $2, $3
-)
-RETURNING id, user_id, project_id, action, details, created_at
-`
-
-type CreateLogParams struct {
-	UserID  pgtype.Int4 `json:"user_id"`
-	Action  pgtype.Text `json:"action"`
-	Details pgtype.Text `json:"details"`
-}
-
-func (q *Queries) CreateLog(ctx context.Context, arg CreateLogParams) (Log, error) {
-	row := q.db.QueryRow(ctx, createLog, arg.UserID, arg.Action, arg.Details)
-	var i Log
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.ProjectID,
-		&i.Action,
-		&i.Details,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const createProjectLog = `-- name: CreateProjectLog :one
-INSERT INTO logs (user_id, action, details, project_id)
+INSERT INTO logs (user_id, project_id, action, details)
 VALUES ($1, $2, $3, $4)
 RETURNING id, user_id, project_id, action, details, created_at
 `
 
-type CreateProjectLogParams struct {
+type CreateLogParams struct {
 	UserID    pgtype.Int4 `json:"user_id"`
+	ProjectID pgtype.Int4 `json:"project_id"`
 	Action    pgtype.Text `json:"action"`
 	Details   pgtype.Text `json:"details"`
-	ProjectID pgtype.Int4 `json:"project_id"`
 }
 
-func (q *Queries) CreateProjectLog(ctx context.Context, arg CreateProjectLogParams) (Log, error) {
-	row := q.db.QueryRow(ctx, createProjectLog,
+func (q *Queries) CreateLog(ctx context.Context, arg CreateLogParams) (Log, error) {
+	row := q.db.QueryRow(ctx, createLog,
 		arg.UserID,
+		arg.ProjectID,
 		arg.Action,
 		arg.Details,
-		arg.ProjectID,
 	)
 	var i Log
 	err := row.Scan(
@@ -75,8 +44,7 @@ func (q *Queries) CreateProjectLog(ctx context.Context, arg CreateProjectLogPara
 }
 
 const deleteLog = `-- name: DeleteLog :exec
-DELETE FROM logs
-WHERE id = $1
+DELETE FROM logs WHERE id = $1
 `
 
 func (q *Queries) DeleteLog(ctx context.Context, id int32) error {
@@ -84,13 +52,12 @@ func (q *Queries) DeleteLog(ctx context.Context, id int32) error {
 	return err
 }
 
-const getLog = `-- name: GetLog :one
-SELECT id, user_id, project_id, action, details, created_at FROM logs
-WHERE id = $1 LIMIT 1
+const getLogByID = `-- name: GetLogByID :one
+SELECT id, user_id, project_id, action, details, created_at FROM logs WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetLog(ctx context.Context, id int32) (Log, error) {
-	row := q.db.QueryRow(ctx, getLog, id)
+func (q *Queries) GetLogByID(ctx context.Context, id int32) (Log, error) {
+	row := q.db.QueryRow(ctx, getLogByID, id)
 	var i Log
 	err := row.Scan(
 		&i.ID,
@@ -103,62 +70,19 @@ func (q *Queries) GetLog(ctx context.Context, id int32) (Log, error) {
 	return i, err
 }
 
-const listLogs = `-- name: ListLogs :many
+const getLogsByProjectOrUser = `-- name: GetLogsByProjectOrUser :many
 SELECT id, user_id, project_id, action, details, created_at FROM logs
-WHERE user_id = $1
-ORDER BY id
-LIMIT $2
-OFFSET $3
-`
-
-type ListLogsParams struct {
-	UserID pgtype.Int4 `json:"user_id"`
-	Limit  int32       `json:"limit"`
-	Offset int32       `json:"offset"`
-}
-
-func (q *Queries) ListLogs(ctx context.Context, arg ListLogsParams) ([]Log, error) {
-	rows, err := q.db.Query(ctx, listLogs, arg.UserID, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Log
-	for rows.Next() {
-		var i Log
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.ProjectID,
-			&i.Action,
-			&i.Details,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listLogsByProject = `-- name: ListLogsByProject :many
-SELECT id, user_id, project_id, action, details, created_at FROM logs
-WHERE project_id = $1
+WHERE project_id = $1 OR user_id = $2
 ORDER BY created_at DESC
-LIMIT $2 OFFSET $3
 `
 
-type ListLogsByProjectParams struct {
+type GetLogsByProjectOrUserParams struct {
 	ProjectID pgtype.Int4 `json:"project_id"`
-	Limit     int32       `json:"limit"`
-	Offset    int32       `json:"offset"`
+	UserID    pgtype.Int4 `json:"user_id"`
 }
 
-func (q *Queries) ListLogsByProject(ctx context.Context, arg ListLogsByProjectParams) ([]Log, error) {
-	rows, err := q.db.Query(ctx, listLogsByProject, arg.ProjectID, arg.Limit, arg.Offset)
+func (q *Queries) GetLogsByProjectOrUser(ctx context.Context, arg GetLogsByProjectOrUserParams) ([]Log, error) {
+	rows, err := q.db.Query(ctx, getLogsByProjectOrUser, arg.ProjectID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}

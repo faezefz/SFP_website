@@ -12,16 +12,8 @@ import (
 )
 
 const createPrediction = `-- name: CreatePrediction :one
-INSERT INTO predictions (
-  user_id,
-  dataset_id,
-  model_id,
-  result_file_path,
-  status,
-  project_id         
-) VALUES (
-  $1, $2, $3, $4, $5, $6
-)
+INSERT INTO predictions (user_id, dataset_id, model_id, project_id, result_file_path)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id, user_id, dataset_id, model_id, project_id, result_file_path, status, created_at
 `
 
@@ -29,9 +21,8 @@ type CreatePredictionParams struct {
 	UserID         pgtype.Int4 `json:"user_id"`
 	DatasetID      pgtype.Int4 `json:"dataset_id"`
 	ModelID        pgtype.Int4 `json:"model_id"`
-	ResultFilePath pgtype.Text `json:"result_file_path"`
-	Status         pgtype.Text `json:"status"`
 	ProjectID      pgtype.Int4 `json:"project_id"`
+	ResultFilePath pgtype.Text `json:"result_file_path"`
 }
 
 func (q *Queries) CreatePrediction(ctx context.Context, arg CreatePredictionParams) (Prediction, error) {
@@ -39,9 +30,8 @@ func (q *Queries) CreatePrediction(ctx context.Context, arg CreatePredictionPara
 		arg.UserID,
 		arg.DatasetID,
 		arg.ModelID,
-		arg.ResultFilePath,
-		arg.Status,
 		arg.ProjectID,
+		arg.ResultFilePath,
 	)
 	var i Prediction
 	err := row.Scan(
@@ -58,8 +48,7 @@ func (q *Queries) CreatePrediction(ctx context.Context, arg CreatePredictionPara
 }
 
 const deletePrediction = `-- name: DeletePrediction :exec
-DELETE FROM predictions
-WHERE id = $1
+DELETE FROM predictions WHERE id = $1
 `
 
 func (q *Queries) DeletePrediction(ctx context.Context, id int32) error {
@@ -67,13 +56,12 @@ func (q *Queries) DeletePrediction(ctx context.Context, id int32) error {
 	return err
 }
 
-const getPrediction = `-- name: GetPrediction :one
-SELECT id, user_id, dataset_id, model_id, project_id, result_file_path, status, created_at FROM predictions
-WHERE id = $1 LIMIT 1
+const getPredictionByID = `-- name: GetPredictionByID :one
+SELECT id, user_id, dataset_id, model_id, project_id, result_file_path, status, created_at FROM predictions WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetPrediction(ctx context.Context, id int32) (Prediction, error) {
-	row := q.db.QueryRow(ctx, getPrediction, id)
+func (q *Queries) GetPredictionByID(ctx context.Context, id int32) (Prediction, error) {
+	row := q.db.QueryRow(ctx, getPredictionByID, id)
 	var i Prediction
 	err := row.Scan(
 		&i.ID,
@@ -88,112 +76,12 @@ func (q *Queries) GetPrediction(ctx context.Context, id int32) (Prediction, erro
 	return i, err
 }
 
-const listPredictions = `-- name: ListPredictions :many
-SELECT id, user_id, dataset_id, model_id, project_id, result_file_path, status, created_at FROM predictions
-WHERE user_id = $1
-ORDER BY id
-LIMIT $2
-OFFSET $3
+const getPredictionsByUserID = `-- name: GetPredictionsByUserID :many
+SELECT id, user_id, dataset_id, model_id, project_id, result_file_path, status, created_at FROM predictions WHERE user_id = $1 ORDER BY id
 `
 
-type ListPredictionsParams struct {
-	UserID pgtype.Int4 `json:"user_id"`
-	Limit  int32       `json:"limit"`
-	Offset int32       `json:"offset"`
-}
-
-func (q *Queries) ListPredictions(ctx context.Context, arg ListPredictionsParams) ([]Prediction, error) {
-	rows, err := q.db.Query(ctx, listPredictions, arg.UserID, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Prediction
-	for rows.Next() {
-		var i Prediction
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.DatasetID,
-			&i.ModelID,
-			&i.ProjectID,
-			&i.ResultFilePath,
-			&i.Status,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPredictionsByProject = `-- name: ListPredictionsByProject :many
-SELECT id, user_id, dataset_id, model_id, project_id, result_file_path, status, created_at FROM predictions
-WHERE project_id = $1
-ORDER BY created_at DESC
-LIMIT $2 OFFSET $3
-`
-
-type ListPredictionsByProjectParams struct {
-	ProjectID pgtype.Int4 `json:"project_id"`
-	Limit     int32       `json:"limit"`
-	Offset    int32       `json:"offset"`
-}
-
-func (q *Queries) ListPredictionsByProject(ctx context.Context, arg ListPredictionsByProjectParams) ([]Prediction, error) {
-	rows, err := q.db.Query(ctx, listPredictionsByProject, arg.ProjectID, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Prediction
-	for rows.Next() {
-		var i Prediction
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.DatasetID,
-			&i.ModelID,
-			&i.ProjectID,
-			&i.ResultFilePath,
-			&i.Status,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPredictionsByProjectAndStatus = `-- name: ListPredictionsByProjectAndStatus :many
-SELECT id, user_id, dataset_id, model_id, project_id, result_file_path, status, created_at FROM predictions
-WHERE project_id = $1 AND status = $2
-ORDER BY created_at DESC
-LIMIT $3 OFFSET $4
-`
-
-type ListPredictionsByProjectAndStatusParams struct {
-	ProjectID pgtype.Int4 `json:"project_id"`
-	Status    pgtype.Text `json:"status"`
-	Limit     int32       `json:"limit"`
-	Offset    int32       `json:"offset"`
-}
-
-func (q *Queries) ListPredictionsByProjectAndStatus(ctx context.Context, arg ListPredictionsByProjectAndStatusParams) ([]Prediction, error) {
-	rows, err := q.db.Query(ctx, listPredictionsByProjectAndStatus,
-		arg.ProjectID,
-		arg.Status,
-		arg.Limit,
-		arg.Offset,
-	)
+func (q *Queries) GetPredictionsByUserID(ctx context.Context, userID pgtype.Int4) ([]Prediction, error) {
+	rows, err := q.db.Query(ctx, getPredictionsByUserID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -223,8 +111,7 @@ func (q *Queries) ListPredictionsByProjectAndStatus(ctx context.Context, arg Lis
 
 const updatePrediction = `-- name: UpdatePrediction :one
 UPDATE predictions
-  SET result_file_path = $2,
-      status = $3
+SET result_file_path = $2
 WHERE id = $1
 RETURNING id, user_id, dataset_id, model_id, project_id, result_file_path, status, created_at
 `
@@ -232,11 +119,10 @@ RETURNING id, user_id, dataset_id, model_id, project_id, result_file_path, statu
 type UpdatePredictionParams struct {
 	ID             int32       `json:"id"`
 	ResultFilePath pgtype.Text `json:"result_file_path"`
-	Status         pgtype.Text `json:"status"`
 }
 
 func (q *Queries) UpdatePrediction(ctx context.Context, arg UpdatePredictionParams) (Prediction, error) {
-	row := q.db.QueryRow(ctx, updatePrediction, arg.ID, arg.ResultFilePath, arg.Status)
+	row := q.db.QueryRow(ctx, updatePrediction, arg.ID, arg.ResultFilePath)
 	var i Prediction
 	err := row.Scan(
 		&i.ID,

@@ -12,14 +12,8 @@ import (
 )
 
 const createDataset = `-- name: CreateDataset :one
-INSERT INTO datasets (
-  user_id,
-  name,
-  description,
-  file_path
-) VALUES (
-  $1, $2, $3, $4
-)
+INSERT INTO datasets (user_id, name, description, file_path)
+VALUES ($1, $2, $3, $4)
 RETURNING id, user_id, name, description, file_path, uploaded_at
 `
 
@@ -50,8 +44,7 @@ func (q *Queries) CreateDataset(ctx context.Context, arg CreateDatasetParams) (D
 }
 
 const deleteDataset = `-- name: DeleteDataset :exec
-DELETE FROM datasets
-WHERE id = $1
+DELETE FROM datasets WHERE id = $1
 `
 
 func (q *Queries) DeleteDataset(ctx context.Context, id int32) error {
@@ -59,13 +52,12 @@ func (q *Queries) DeleteDataset(ctx context.Context, id int32) error {
 	return err
 }
 
-const getDataset = `-- name: GetDataset :one
-SELECT id, user_id, name, description, file_path, uploaded_at FROM datasets
-WHERE id = $1 LIMIT 1
+const getDatasetByID = `-- name: GetDatasetByID :one
+SELECT id, user_id, name, description, file_path, uploaded_at FROM datasets WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetDataset(ctx context.Context, id int32) (Dataset, error) {
-	row := q.db.QueryRow(ctx, getDataset, id)
+func (q *Queries) GetDatasetByID(ctx context.Context, id int32) (Dataset, error) {
+	row := q.db.QueryRow(ctx, getDatasetByID, id)
 	var i Dataset
 	err := row.Scan(
 		&i.ID,
@@ -78,55 +70,12 @@ func (q *Queries) GetDataset(ctx context.Context, id int32) (Dataset, error) {
 	return i, err
 }
 
-const listDatasets = `-- name: ListDatasets :many
-SELECT id, user_id, name, description, file_path, uploaded_at FROM datasets
-WHERE user_id = $1
-ORDER BY id
-LIMIT $2
-OFFSET $3
+const getDatasetsByUserID = `-- name: GetDatasetsByUserID :many
+SELECT id, user_id, name, description, file_path, uploaded_at FROM datasets WHERE user_id = $1 ORDER BY id
 `
 
-type ListDatasetsParams struct {
-	UserID pgtype.Int4 `json:"user_id"`
-	Limit  int32       `json:"limit"`
-	Offset int32       `json:"offset"`
-}
-
-func (q *Queries) ListDatasets(ctx context.Context, arg ListDatasetsParams) ([]Dataset, error) {
-	rows, err := q.db.Query(ctx, listDatasets, arg.UserID, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Dataset
-	for rows.Next() {
-		var i Dataset
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Name,
-			&i.Description,
-			&i.FilePath,
-			&i.UploadedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listDatasetsByUserID = `-- name: ListDatasetsByUserID :many
-SELECT id, user_id, name, description, file_path, uploaded_at FROM datasets
-WHERE user_id = $1
-ORDER BY uploaded_at DESC
-`
-
-func (q *Queries) ListDatasetsByUserID(ctx context.Context, userID pgtype.Int4) ([]Dataset, error) {
-	rows, err := q.db.Query(ctx, listDatasetsByUserID, userID)
+func (q *Queries) GetDatasetsByUserID(ctx context.Context, userID pgtype.Int4) ([]Dataset, error) {
+	rows, err := q.db.Query(ctx, getDatasetsByUserID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -154,9 +103,10 @@ func (q *Queries) ListDatasetsByUserID(ctx context.Context, userID pgtype.Int4) 
 
 const updateDataset = `-- name: UpdateDataset :one
 UPDATE datasets
-  SET name = $2,
-      description = $3,
-      file_path = $4
+SET name = $2,
+    description = $3,
+    file_path = $4,
+    updated_at = NOW()
 WHERE id = $1
 RETURNING id, user_id, name, description, file_path, uploaded_at
 `
