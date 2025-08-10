@@ -19,7 +19,7 @@ INSERT INTO logs (
 ) VALUES (
   $1, $2, $3
 )
-RETURNING id, user_id, action, details, created_at, project_id
+RETURNING id, user_id, project_id, action, details, created_at
 `
 
 type CreateLogParams struct {
@@ -34,10 +34,42 @@ func (q *Queries) CreateLog(ctx context.Context, arg CreateLogParams) (Log, erro
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
+		&i.ProjectID,
 		&i.Action,
 		&i.Details,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createProjectLog = `-- name: CreateProjectLog :one
+INSERT INTO logs (user_id, action, details, project_id)
+VALUES ($1, $2, $3, $4)
+RETURNING id, user_id, project_id, action, details, created_at
+`
+
+type CreateProjectLogParams struct {
+	UserID    pgtype.Int4 `json:"user_id"`
+	Action    pgtype.Text `json:"action"`
+	Details   pgtype.Text `json:"details"`
+	ProjectID pgtype.Int4 `json:"project_id"`
+}
+
+func (q *Queries) CreateProjectLog(ctx context.Context, arg CreateProjectLogParams) (Log, error) {
+	row := q.db.QueryRow(ctx, createProjectLog,
+		arg.UserID,
+		arg.Action,
+		arg.Details,
+		arg.ProjectID,
+	)
+	var i Log
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
 		&i.ProjectID,
+		&i.Action,
+		&i.Details,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -53,7 +85,7 @@ func (q *Queries) DeleteLog(ctx context.Context, id int32) error {
 }
 
 const getLog = `-- name: GetLog :one
-SELECT id, user_id, action, details, created_at, project_id FROM logs
+SELECT id, user_id, project_id, action, details, created_at FROM logs
 WHERE id = $1 LIMIT 1
 `
 
@@ -63,16 +95,16 @@ func (q *Queries) GetLog(ctx context.Context, id int32) (Log, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
+		&i.ProjectID,
 		&i.Action,
 		&i.Details,
 		&i.CreatedAt,
-		&i.ProjectID,
 	)
 	return i, err
 }
 
 const listLogs = `-- name: ListLogs :many
-SELECT id, user_id, action, details, created_at, project_id FROM logs
+SELECT id, user_id, project_id, action, details, created_at FROM logs
 WHERE user_id = $1
 ORDER BY id
 LIMIT $2
@@ -97,10 +129,50 @@ func (q *Queries) ListLogs(ctx context.Context, arg ListLogsParams) ([]Log, erro
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
+			&i.ProjectID,
 			&i.Action,
 			&i.Details,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLogsByProject = `-- name: ListLogsByProject :many
+SELECT id, user_id, project_id, action, details, created_at FROM logs
+WHERE project_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListLogsByProjectParams struct {
+	ProjectID pgtype.Int4 `json:"project_id"`
+	Limit     int32       `json:"limit"`
+	Offset    int32       `json:"offset"`
+}
+
+func (q *Queries) ListLogsByProject(ctx context.Context, arg ListLogsByProjectParams) ([]Log, error) {
+	rows, err := q.db.Query(ctx, listLogsByProject, arg.ProjectID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Log
+	for rows.Next() {
+		var i Log
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
 			&i.ProjectID,
+			&i.Action,
+			&i.Details,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -20,10 +20,10 @@ type Dataset struct {
 type Log struct {
 	ID        int32            `json:"id"`
 	UserID    pgtype.Int4      `json:"user_id"`
+	ProjectID pgtype.Int4      `json:"project_id"`
 	Action    pgtype.Text      `json:"action"`
 	Details   pgtype.Text      `json:"details"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
-	ProjectID pgtype.Int4      `json:"project_id"`
 }
 
 type Model struct {
@@ -41,10 +41,10 @@ type Prediction struct {
 	UserID         pgtype.Int4      `json:"user_id"`
 	DatasetID      pgtype.Int4      `json:"dataset_id"`
 	ModelID        pgtype.Int4      `json:"model_id"`
+	ProjectID      pgtype.Int4      `json:"project_id"`
 	ResultFilePath pgtype.Text      `json:"result_file_path"`
 	Status         pgtype.Text      `json:"status"`
 	CreatedAt      pgtype.Timestamp `json:"created_at"`
-	ProjectID      pgtype.Int4      `json:"project_id"`
 }
 
 type Project struct {
