@@ -80,11 +80,18 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, password_hash, full_name, created_at FROM users ORDER BY id
+SELECT id, email, password_hash, full_name, created_at FROM users
+ORDER BY id
+LIMIT $2 OFFSET $1
 `
 
-func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
-	rows, err := q.db.Query(ctx, listUsers)
+type ListUsersParams struct {
+	Offset int32 `json:"offset"`
+	Limit  int32 `json:"limit"`
+}
+
+func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsers, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -113,8 +120,7 @@ const updateUser = `-- name: UpdateUser :one
 UPDATE users
 SET email = $2,
     password_hash = $3,
-    full_name = $4,
-    updated_at = NOW()
+    full_name = $4
 WHERE id = $1
 RETURNING id, email, password_hash, full_name, created_at
 `

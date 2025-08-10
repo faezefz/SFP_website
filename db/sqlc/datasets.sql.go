@@ -105,8 +105,7 @@ const updateDataset = `-- name: UpdateDataset :one
 UPDATE datasets
 SET name = $2,
     description = $3,
-    file_path = $4,
-    updated_at = NOW()
+    file_path = $4
 WHERE id = $1
 RETURNING id, user_id, name, description, file_path, uploaded_at
 `

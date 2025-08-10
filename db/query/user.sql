@@ -13,8 +13,7 @@ SELECT * FROM users WHERE email = $1 LIMIT 1;
 UPDATE users
 SET email = $2,
     password_hash = $3,
-    full_name = $4,
-    updated_at = NOW()
+    full_name = $4
 WHERE id = $1
 RETURNING *;
 
@@ -22,4 +21,6 @@ RETURNING *;
 DELETE FROM users WHERE id = $1;
 
 -- name: ListUsers :many
-SELECT * FROM users ORDER BY id;
+SELECT * FROM users
+ORDER BY id
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
