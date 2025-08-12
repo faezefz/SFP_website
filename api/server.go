@@ -2,15 +2,17 @@ package api
 
 import (
 	"context"
-	_ "fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	db "github.com/faezefz/SFP_website/db/sqlc"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/crypto/bcrypt" // اضافه کردن این خط برای استفاده از bcrypt
 )
 
 // Server struct
@@ -45,9 +47,13 @@ func (s *Server) Routes() {
 	auth := s.Router.Group("/")
 	auth.Use(s.authMiddleware()) // فقط این گروه به احراز هویت نیاز دارد
 	{
-		auth.GET("/dashboard/:id", s.userDashboard) // صفحه داشبورد
-		auth.POST("/datasets", s.uploadDataset)     // آپلود داده
-		auth.GET("/datasets", s.listDatasets)       // نمایش داده‌ها
+		auth.GET("/dashboard", s.userDashboard) // صفحه داشبورد
+		auth.POST("/datasets", s.uploadDataset) // آپلود داده
+		auth.GET("/datasets", s.listDatasets)
+		auth.POST("/projects", s.createProject)                      // ایجاد پروژه
+		auth.GET("/projects/:owner_user_id", s.getProjectsByOwnerID) // دریافت پروژه‌ها بر اساس owner_user_id
+		auth.PUT("/projects/:project_id", s.updateProject)           // ویرایش پروژه
+		auth.DELETE("/projects/:project_id", s.deleteProject)        // نمایش داده‌ها
 	}
 }
 
@@ -78,10 +84,17 @@ func (s *Server) signup(c *gin.Context) {
 		return
 	}
 
-	// ذخیره‌سازی پسورد بدون هش کردن
+	// هش کردن پسورد قبل از ذخیره در دیتابیس
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	// ذخیره‌سازی پسورد هش شده
 	arg := db.CreateUserParams{
 		Email:        req.Email,
-		PasswordHash: req.Password, // ذخیره‌سازی پسورد بدون هش کردن
+		PasswordHash: string(hashedPassword), // پسورد هش شده را ذخیره می‌کنیم
 		FullName:     pgtype.Text{String: req.FullName, Valid: req.FullName != ""},
 	}
 
@@ -115,13 +128,14 @@ func (s *Server) login(c *gin.Context) {
 		return
 	}
 
-	// مقایسه پسورد وارد شده با پسورد ذخیره شده (بدون هش)
-	if user.PasswordHash != req.Password {
+	// مقایسه پسورد وارد شده با پسورد هش شده در دیتابیس
+	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password))
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// لاگین موفق، فقط پیام تایید باز می‌گردد
+	// لاگین موفق
 	c.JSON(http.StatusOK, gin.H{"user_id": user.ID})
 }
 
@@ -174,7 +188,7 @@ func (s *Server) listDatasets(c *gin.Context) {
 	// به سادگی داده‌ها را نمایش می‌دهیم
 	userID, _ := c.Get("user_id")
 	userIDParam := pgtype.Int4{Int32: userID.(int32), Valid: true}
-	datasets, err := s.Db.ListDatasetsByUserID(context.Background(), userIDParam)
+	datasets, err := s.Db.GetDatasetsByUserID(context.Background(), userIDParam)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch datasets"})
 		return
@@ -204,16 +218,116 @@ func (s *Server) userDashboard(c *gin.Context) {
 		return
 	}
 
-	datasets, err := s.Db.ListDatasetsByUserID(context.Background(), pgtype.Int4{Int32: userID, Valid: true})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch datasets"})
+	// ارسال اطلاعات پروفایل یا داشبورد
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Welcome to your dashboard",
+		"user_id": userID,
+	})
+}
+
+// createProject
+func (s *Server) createProject(c *gin.Context) {
+	type createProjectRequest struct {
+		OwnerUserID int32  `json:"owner_user_id" binding:"required"`
+		Name        string `json:"name" binding:"required"`
+		Description string `json:"description"`
+	}
+	print(c.Request.Body)
+	var req createProjectRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// ارسال اطلاعات پروفایل یا داشبورد
-	c.JSON(http.StatusOK, gin.H{
-		"message":  "Welcome to your dashboard",
-		"user_id":  userID,
-		"datasets": datasets,
-	})
+	// ذخیره پروژه در دیتابیس
+	arg := db.CreateProjectParams{
+		OwnerUserID: req.OwnerUserID,
+		Name:        req.Name,
+		Description: pgtype.Text{String: req.Description, Valid: req.Description != ""},
+	}
+
+	project, err := s.Db.CreateProject(context.Background(), arg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create project"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, project)
+}
+
+// getProjectsByOwnerID
+func (s *Server) getProjectsByOwnerID(c *gin.Context) {
+	ownerUserID := c.Param("owner_user_id")
+
+	// تبدیل شناسه کاربر از string به int32
+	ownerUserIDInt, err := strconv.Atoi(ownerUserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid owner_user_id format"})
+		return
+	}
+
+	// دریافت پروژه‌ها از دیتابیس با استفاده از شناسه کاربر
+	projects, err := s.Db.GetProjectsByOwnerID(context.Background(), int32(ownerUserIDInt))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch projects"})
+		return
+	}
+
+	c.JSON(http.StatusOK, projects)
+}
+
+// updateProject
+func (s *Server) updateProject(c *gin.Context) {
+	type updateProjectRequest struct {
+		Name        string `json:"name" binding:"required"`
+		Description string `json:"description"`
+	}
+
+	projectID := c.Param("project_id")
+	projectIDInt, err := strconv.Atoi(projectID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project_id format"})
+		return
+	}
+
+	var req updateProjectRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// ویرایش پروژه در دیتابیس
+	arg := db.UpdateProjectParams{
+		ID:          int32(projectIDInt),
+		Name:        req.Name,
+		Description: pgtype.Text{String: req.Description, Valid: req.Description != ""},
+	}
+
+	project, err := s.Db.UpdateProject(context.Background(), arg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update project"})
+		return
+	}
+
+	c.JSON(http.StatusOK, project)
+}
+
+// deleteProject
+func (s *Server) deleteProject(c *gin.Context) {
+	projectID := c.Param("project_id")
+	projectIDInt, err := strconv.Atoi(projectID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project_id format"})
+		return
+	}
+	projectIDInt32 := int32(projectIDInt)
+
+	// حذف پروژه از دیتابیس
+	err = s.Db.DeleteProject(context.Background(), projectIDInt32)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete project"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Project deleted successfully"})
 }

@@ -13,8 +13,7 @@ SELECT * FROM models WHERE user_id = $1 ORDER BY id;
 UPDATE models
 SET name = $2,
     description = $3,
-    file_path = $4,
-    updated_at = NOW()
+    file_path = $4
 WHERE id = $1
 RETURNING *;
 
