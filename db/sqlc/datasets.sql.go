@@ -12,16 +12,16 @@ import (
 )
 
 const createDataset = `-- name: CreateDataset :one
-INSERT INTO datasets (user_id, name, description, file_path)
+INSERT INTO datasets (user_id, name, description, content)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, name, description, file_path, uploaded_at
+RETURNING id, user_id, name, description, content, uploaded_at
 `
 
 type CreateDatasetParams struct {
 	UserID      pgtype.Int4 `json:"user_id"`
 	Name        string      `json:"name"`
 	Description pgtype.Text `json:"description"`
-	FilePath    string      `json:"file_path"`
+	Content     []byte      `json:"content"`
 }
 
 func (q *Queries) CreateDataset(ctx context.Context, arg CreateDatasetParams) (Dataset, error) {
@@ -29,7 +29,7 @@ func (q *Queries) CreateDataset(ctx context.Context, arg CreateDatasetParams) (D
 		arg.UserID,
 		arg.Name,
 		arg.Description,
-		arg.FilePath,
+		arg.Content,
 	)
 	var i Dataset
 	err := row.Scan(
@@ -37,7 +37,7 @@ func (q *Queries) CreateDataset(ctx context.Context, arg CreateDatasetParams) (D
 		&i.UserID,
 		&i.Name,
 		&i.Description,
-		&i.FilePath,
+		&i.Content,
 		&i.UploadedAt,
 	)
 	return i, err
@@ -53,7 +53,7 @@ func (q *Queries) DeleteDataset(ctx context.Context, id int32) error {
 }
 
 const getDatasetByID = `-- name: GetDatasetByID :one
-SELECT id, user_id, name, description, file_path, uploaded_at FROM datasets WHERE id = $1 LIMIT 1
+SELECT id, user_id, name, description, content, uploaded_at FROM datasets WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetDatasetByID(ctx context.Context, id int32) (Dataset, error) {
@@ -64,14 +64,14 @@ func (q *Queries) GetDatasetByID(ctx context.Context, id int32) (Dataset, error)
 		&i.UserID,
 		&i.Name,
 		&i.Description,
-		&i.FilePath,
+		&i.Content,
 		&i.UploadedAt,
 	)
 	return i, err
 }
 
 const getDatasetsByUserID = `-- name: GetDatasetsByUserID :many
-SELECT id, user_id, name, description, file_path, uploaded_at FROM datasets WHERE user_id = $1 ORDER BY id
+SELECT id, user_id, name, description, content, uploaded_at FROM datasets WHERE user_id = $1 ORDER BY id
 `
 
 func (q *Queries) GetDatasetsByUserID(ctx context.Context, userID pgtype.Int4) ([]Dataset, error) {
@@ -88,7 +88,7 @@ func (q *Queries) GetDatasetsByUserID(ctx context.Context, userID pgtype.Int4) (
 			&i.UserID,
 			&i.Name,
 			&i.Description,
-			&i.FilePath,
+			&i.Content,
 			&i.UploadedAt,
 		); err != nil {
 			return nil, err
@@ -105,16 +105,16 @@ const updateDataset = `-- name: UpdateDataset :one
 UPDATE datasets
 SET name = $2,
     description = $3,
-    file_path = $4
+    content = $4
 WHERE id = $1
-RETURNING id, user_id, name, description, file_path, uploaded_at
+RETURNING id, user_id, name, description, content, uploaded_at
 `
 
 type UpdateDatasetParams struct {
 	ID          int32       `json:"id"`
 	Name        string      `json:"name"`
 	Description pgtype.Text `json:"description"`
-	FilePath    string      `json:"file_path"`
+	Content     []byte      `json:"content"`
 }
 
 func (q *Queries) UpdateDataset(ctx context.Context, arg UpdateDatasetParams) (Dataset, error) {
@@ -122,7 +122,7 @@ func (q *Queries) UpdateDataset(ctx context.Context, arg UpdateDatasetParams) (D
 		arg.ID,
 		arg.Name,
 		arg.Description,
-		arg.FilePath,
+		arg.Content,
 	)
 	var i Dataset
 	err := row.Scan(
@@ -130,7 +130,7 @@ func (q *Queries) UpdateDataset(ctx context.Context, arg UpdateDatasetParams) (D
 		&i.UserID,
 		&i.Name,
 		&i.Description,
-		&i.FilePath,
+		&i.Content,
 		&i.UploadedAt,
 	)
 	return i, err

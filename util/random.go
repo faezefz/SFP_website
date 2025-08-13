@@ -2,6 +2,7 @@ package util
 
 import (
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 )
@@ -58,4 +59,15 @@ func RandomPassword() string {
 	}
 
 	return sb.String()
+}
+
+func ReadCSV() ([]byte, error) {
+	// خواندن محتوای فایل CSV به صورت بایت
+	fileContent, err := os.ReadFile("../../util/testfile.csv") // مسیر فایل CSV
+	if err != nil {
+		return nil, err // در صورت بروز خطا، آن را برمی‌گرداند
+	}
+
+	// بازگشت محتویات فایل به صورت بایت
+	return fileContent, nil
 }

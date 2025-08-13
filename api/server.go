@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
@@ -149,21 +150,38 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 
 // uploadDataset
 func (s *Server) uploadDataset(c *gin.Context) {
-	// برای سادگی، ما نیازی به احراز هویت نداریم
+	// تعریف ساختار درخواست
 	type uploadRequest struct {
 		Name        string `json:"name" binding:"required"`
 		Description string `json:"description"`
-		FilePath    string `json:"file_path" binding:"required"`
 	}
 
 	var req uploadRequest
 
+	// بررسی پارامترهای ورودی
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	userID, _ := c.Get("user_id") // به سادگی، از اطلاعات کاربر موجود استفاده می‌کنیم
+	// دریافت فایل CSV از درخواست
+	file, _, err := c.Request.FormFile("content")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
+		return
+	}
+
+	// خواندن فایل به صورت بایت
+	fileContent, err := ioutil.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file"})
+		return
+	}
+
+	// گرفتن ID کاربر از سشن یا کانتکست
+	userID, _ := c.Get("user_id")
+
+	// آماده‌سازی داده‌ها برای ذخیره در پایگاه داده
 	arg := db.CreateDatasetParams{
 		UserID: pgtype.Int4{Int32: userID.(int32), Valid: true},
 		Name:   req.Name,
@@ -171,15 +189,17 @@ func (s *Server) uploadDataset(c *gin.Context) {
 			String: req.Description,
 			Valid:  req.Description != "",
 		},
-		FilePath: req.FilePath,
+		Content: fileContent, // ذخیره فایل به صورت بایت
 	}
 
+	// ایجاد دیتاست در پایگاه داده
 	dataset, err := s.Db.CreateDataset(context.Background(), arg)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create dataset"})
 		return
 	}
 
+	// ارسال پاسخ موفقیت‌آمیز
 	c.JSON(http.StatusCreated, gin.H{"dataset_id": dataset.ID})
 }
 

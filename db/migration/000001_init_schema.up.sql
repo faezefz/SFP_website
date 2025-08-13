@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS "datasets" (
   "user_id" int REFERENCES "users" ("id"),
   "name" varchar NOT NULL,
   "description" text,
-  "file_path" text NOT NULL,
+  "content" BYTEA NOT NULL,
   "uploaded_at" timestamp DEFAULT (CURRENT_TIMESTAMP)
 );
 
@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS "project_models" (
   "added_at" timestamp DEFAULT (CURRENT_TIMESTAMP),
   PRIMARY KEY ("project_id","model_id")
 );
+
 
 -- 9. ایندکس‌ها
 CREATE INDEX ON "project_datasets" ("project_id");

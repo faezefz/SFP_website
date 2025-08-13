@@ -25,7 +25,7 @@ func (q *Queries) AddDatasetToProject(ctx context.Context, arg AddDatasetToProje
 }
 
 const getDatasetsByProjectID = `-- name: GetDatasetsByProjectID :many
-SELECT d.id, d.user_id, d.name, d.description, d.file_path, d.uploaded_at
+SELECT d.id, d.user_id, d.name, d.description, d.content, d.uploaded_at
 FROM datasets d
 JOIN project_datasets pd ON d.id = pd.dataset_id
 WHERE pd.project_id = $1
@@ -45,7 +45,7 @@ func (q *Queries) GetDatasetsByProjectID(ctx context.Context, projectID int32) (
 			&i.UserID,
 			&i.Name,
 			&i.Description,
-			&i.FilePath,
+			&i.Content,
 			&i.UploadedAt,
 		); err != nil {
 			return nil, err

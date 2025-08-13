@@ -1,5 +1,5 @@
 -- name: CreateDataset :one
-INSERT INTO datasets (user_id, name, description, file_path)
+INSERT INTO datasets (user_id, name, description, content)
 VALUES ($1, $2, $3, $4)
 RETURNING *;
 
@@ -13,7 +13,7 @@ SELECT * FROM datasets WHERE user_id = $1 ORDER BY id;
 UPDATE datasets
 SET name = $2,
     description = $3,
-    file_path = $4
+    content = $4
 WHERE id = $1
 RETURNING *;
 

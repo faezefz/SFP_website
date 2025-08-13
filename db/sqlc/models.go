@@ -13,7 +13,7 @@ type Dataset struct {
 	UserID      pgtype.Int4      `json:"user_id"`
 	Name        string           `json:"name"`
 	Description pgtype.Text      `json:"description"`
-	FilePath    string           `json:"file_path"`
+	Content     []byte           `json:"content"`
 	UploadedAt  pgtype.Timestamp `json:"uploaded_at"`
 }
 
