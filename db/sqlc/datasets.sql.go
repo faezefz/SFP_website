@@ -70,6 +70,17 @@ func (q *Queries) GetDatasetByID(ctx context.Context, id int32) (Dataset, error)
 	return i, err
 }
 
+const getDatasetContentByID = `-- name: GetDatasetContentByID :one
+SELECT content FROM datasets WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetDatasetContentByID(ctx context.Context, id int32) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getDatasetContentByID, id)
+	var content []byte
+	err := row.Scan(&content)
+	return content, err
+}
+
 const getDatasetsByUserID = `-- name: GetDatasetsByUserID :many
 SELECT id, user_id, name, description, content, uploaded_at FROM datasets WHERE user_id = $1 ORDER BY id
 `

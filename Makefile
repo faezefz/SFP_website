@@ -17,7 +17,8 @@ test:
 	go test -v -cover ./...
 
 server:
-	go run main.go
+	go run main.go &
+	cd python_api && python3 server.py
 
 createdb:
 	docker exec -it postgres12 createdb --username=root --owner=root sfp_db

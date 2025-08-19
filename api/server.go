@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
-	"io/ioutil"
+	"encoding/base64"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -13,13 +15,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/crypto/bcrypt" // اضافه کردن این خط برای استفاده از bcrypt
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Server struct
 type Server struct {
-	Db     *db.Queries // فیلد db هم می‌تواند exported باشد (اگر نیاز به دسترسی از خارج پکیج است)
-	Router *gin.Engine // تغییر از router به Router (با حرف بزرگ)
+	Db     *db.Queries
+	Router *gin.Engine
 }
 
 // NewServer
@@ -36,25 +38,24 @@ func NewServer(dbPool *pgxpool.Pool) *Server {
 
 // routes
 func (s *Server) Routes() {
-	// فعال‌سازی CORS برای همه روت‌ها
-	s.Router.Use(cors.Default()) // استفاده از تنظیمات پیش‌فرض CORS
+	s.Router.Use(cors.Default())
 
-	// مسیرهایی که نیازی به احراز هویت ندارند:
-	s.Router.GET("/", s.home)          // صفحه اصلی
-	s.Router.POST("/login", s.login)   // صفحه ورود
-	s.Router.POST("/signup", s.signup) // ثبت‌نام
+	s.Router.GET("/", s.home)
+	s.Router.POST("/login", s.login)
+	s.Router.POST("/signup", s.signup)
 
-	// این گروه فقط برای مسیرهایی که نیاز به احراز هویت دارند:
 	auth := s.Router.Group("/")
-	auth.Use(s.authMiddleware()) // فقط این گروه به احراز هویت نیاز دارد
+	auth.Use(s.authMiddleware())
 	{
-		auth.GET("/dashboard", s.userDashboard) // صفحه داشبورد
-		auth.POST("/datasets", s.uploadDataset) // آپلود داده
-		auth.GET("/datasets", s.listDatasets)
-		auth.POST("/projects", s.createProject)                      // ایجاد پروژه
-		auth.GET("/projects/:owner_user_id", s.getProjectsByOwnerID) // دریافت پروژه‌ها بر اساس owner_user_id
-		auth.PUT("/projects/:project_id", s.updateProject)           // ویرایش پروژه
-		auth.DELETE("/projects/:project_id", s.deleteProject)        // نمایش داده‌ها
+		auth.GET("/dashboard", s.userDashboard)
+		auth.POST("/import-dataset", s.uploadDataset)
+		auth.GET("/datasets/:owner_user_id", s.listDatasets)
+		auth.POST("/projects", s.createProject)
+		auth.GET("/projects/:owner_user_id", s.getProjectsByOwnerID)
+		auth.PUT("/projects/:project_id", s.updateProject)
+		auth.DELETE("/projects/:project_id", s.deleteProject)
+		auth.GET("/projects/project/:project_id", s.getProjectByID)
+		auth.GET("/dataset/:dataset_id", s.getDatasetByID)
 	}
 }
 
@@ -65,7 +66,6 @@ func (s *Server) Run(addr string) error {
 
 // home
 func (s *Server) home(c *gin.Context) {
-	// ارسال یک پاسخ JSON به فلاتر
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Welcome to the API, please use /login or /signup.",
 	})
@@ -85,14 +85,12 @@ func (s *Server) signup(c *gin.Context) {
 		return
 	}
 
-	// هش کردن پسورد قبل از ذخیره در دیتابیس
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 		return
 	}
 
-	// ذخیره‌سازی پسورد هش شده
 	arg := db.CreateUserParams{
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword), // پسورد هش شده را ذخیره می‌کنیم
@@ -122,95 +120,95 @@ func (s *Server) login(c *gin.Context) {
 		return
 	}
 
-	// جستجو برای کاربر در دیتابیس
 	user, err := s.Db.GetUserByEmail(context.Background(), req.Email)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// مقایسه پسورد وارد شده با پسورد هش شده در دیتابیس
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// لاگین موفق
 	c.JSON(http.StatusOK, gin.H{"user_id": user.ID})
 }
 
 // authMiddleware
 func (s *Server) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// هیچ احراز هویتی برای این مسیرها لازم نیست
+		// Place holder
 		c.Next()
 	}
 }
 
 // uploadDataset
 func (s *Server) uploadDataset(c *gin.Context) {
-	// تعریف ساختار درخواست
-	type uploadRequest struct {
-		Name        string `json:"name" binding:"required"`
-		Description string `json:"description"`
+	for key, values := range c.Request.Form {
+		fmt.Printf("%s: %v\n", key, values)
 	}
 
-	var req uploadRequest
-
-	// بررسی پارامترهای ورودی
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// دریافت فایل CSV از درخواست
 	file, _, err := c.Request.FormFile("content")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get file"})
 		return
 	}
+	defer file.Close()
 
-	// خواندن فایل به صورت بایت
-	fileContent, err := ioutil.ReadAll(file)
+	name := c.PostForm("name")
+	description := c.PostForm("description")
+	userID := c.PostForm("user_id")
+	userIDInt, err := strconv.Atoi(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+	userIDInt32 := int32(userIDInt)
+
+	fileContent, err := io.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file content"})
 		return
 	}
 
-	// گرفتن ID کاربر از سشن یا کانتکست
-	userID, _ := c.Get("user_id")
-
-	// آماده‌سازی داده‌ها برای ذخیره در پایگاه داده
 	arg := db.CreateDatasetParams{
-		UserID: pgtype.Int4{Int32: userID.(int32), Valid: true},
-		Name:   req.Name,
-		Description: pgtype.Text{
-			String: req.Description,
-			Valid:  req.Description != "",
-		},
-		Content: fileContent, // ذخیره فایل به صورت بایت
+		UserID:      pgtype.Int4{Int32: userIDInt32, Valid: true},
+		Name:        name,
+		Description: pgtype.Text{String: description, Valid: description != ""},
+		Content:     fileContent,
 	}
 
-	// ایجاد دیتاست در پایگاه داده
 	dataset, err := s.Db.CreateDataset(context.Background(), arg)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create dataset"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to store dataset in database"})
 		return
 	}
 
-	// ارسال پاسخ موفقیت‌آمیز
-	c.JSON(http.StatusCreated, gin.H{"dataset_id": dataset.ID})
+	c.JSON(http.StatusOK, gin.H{
+		"dataset_id": dataset.ID,
+	})
 }
 
 // listDatasets
 func (s *Server) listDatasets(c *gin.Context) {
-	// به سادگی داده‌ها را نمایش می‌دهیم
-	userID, _ := c.Get("user_id")
-	userIDParam := pgtype.Int4{Int32: userID.(int32), Valid: true}
+	userID := c.Param("owner_user_id")
+	userIDInt, err := strconv.Atoi(userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user_id format"})
+		return
+	}
+
+	userIDParam := pgtype.Int4{Int32: int32(userIDInt), Valid: true}
+
 	datasets, err := s.Db.GetDatasetsByUserID(context.Background(), userIDParam)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch datasets"})
+		return
+	}
+
+	if len(datasets) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No datasets found for this user"})
 		return
 	}
 
@@ -225,20 +223,17 @@ type dashboardRequest struct {
 func (s *Server) userDashboard(c *gin.Context) {
 	var req dashboardRequest
 
-	// دریافت پارامترهای URI
 	if err := c.ShouldBindUri(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID in URL"})
 		return
 	}
 
-	// پر کردن Int4 با مقدار id
 	userID := req.ID.Int32
 	if !req.ID.Valid {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
 
-	// ارسال اطلاعات پروفایل یا داشبورد
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Welcome to your dashboard",
 		"user_id": userID,
@@ -259,7 +254,6 @@ func (s *Server) createProject(c *gin.Context) {
 		return
 	}
 
-	// ذخیره پروژه در دیتابیس
 	arg := db.CreateProjectParams{
 		OwnerUserID: req.OwnerUserID,
 		Name:        req.Name,
@@ -279,14 +273,12 @@ func (s *Server) createProject(c *gin.Context) {
 func (s *Server) getProjectsByOwnerID(c *gin.Context) {
 	ownerUserID := c.Param("owner_user_id")
 
-	// تبدیل شناسه کاربر از string به int32
 	ownerUserIDInt, err := strconv.Atoi(ownerUserID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid owner_user_id format"})
 		return
 	}
 
-	// دریافت پروژه‌ها از دیتابیس با استفاده از شناسه کاربر
 	projects, err := s.Db.GetProjectsByOwnerID(context.Background(), int32(ownerUserIDInt))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch projects"})
@@ -316,7 +308,6 @@ func (s *Server) updateProject(c *gin.Context) {
 		return
 	}
 
-	// ویرایش پروژه در دیتابیس
 	arg := db.UpdateProjectParams{
 		ID:          int32(projectIDInt),
 		Name:        req.Name,
@@ -342,7 +333,6 @@ func (s *Server) deleteProject(c *gin.Context) {
 	}
 	projectIDInt32 := int32(projectIDInt)
 
-	// حذف پروژه از دیتابیس
 	err = s.Db.DeleteProject(context.Background(), projectIDInt32)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete project"})
@@ -350,4 +340,41 @@ func (s *Server) deleteProject(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Project deleted successfully"})
+}
+
+// get dataset by dataset id
+func (s *Server) getDatasetByID(c *gin.Context) {
+	datasetID := c.Param("dataset_id")
+	datasetIDInt, err := strconv.Atoi(datasetID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid dataset id format"})
+		return
+	}
+
+	content, err := s.Db.GetDatasetContentByID(context.Background(), int32(datasetIDInt))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch dataset content"})
+		return
+	}
+	fmt.Println("Content:", content)
+	contentBase64 := base64.StdEncoding.EncodeToString(content)
+
+	c.JSON(http.StatusOK, gin.H{"content": contentBase64})
+}
+
+func (s *Server) getProjectByID(c *gin.Context) {
+	projectID := c.Param("project_id")
+	projectIDInt, err := strconv.Atoi(projectID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project id format"})
+		return
+	}
+
+	project, err := s.Db.GetProjectByID(context.Background(), int32(projectIDInt))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch project"})
+		return
+	}
+
+	c.JSON(http.StatusOK, project)
 }

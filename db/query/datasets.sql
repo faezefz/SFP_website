@@ -6,6 +6,9 @@ RETURNING *;
 -- name: GetDatasetByID :one
 SELECT * FROM datasets WHERE id = $1 LIMIT 1;
 
+-- name: GetDatasetContentByID :one
+SELECT content FROM datasets WHERE id = $1 LIMIT 1;
+
 -- name: GetDatasetsByUserID :many
 SELECT * FROM datasets WHERE user_id = $1 ORDER BY id;
 

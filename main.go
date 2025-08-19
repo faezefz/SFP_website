@@ -32,7 +32,7 @@ func main() {
 	// server.Router.LoadHTMLGlob("templates/*")
 
 	// راه‌اندازی سرور
-	if err := server.Run(":8080"); err != nil {
+	if err := server.Run(":8081"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}
 }

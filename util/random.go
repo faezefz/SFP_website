@@ -68,6 +68,6 @@ func ReadCSV() ([]byte, error) {
 		return nil, err // در صورت بروز خطا، آن را برمی‌گرداند
 	}
 
-	// بازگشت محتویات فایل به صورت بایت
+	// بازگشتمحتویات فایل به صورت بایت
 	return fileContent, nil
 }
