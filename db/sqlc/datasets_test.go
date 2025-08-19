@@ -16,7 +16,6 @@ func createRandomDataset(t *testing.T) Dataset {
 	user := createRandomUser(t)
 	userID := user.ID
 
-	// خواندن محتوای فایل CSV به صورت بایت
 	content, err := util.ReadCSV()
 	if err != nil {
 		log.Fatalf("Error reading CSV: %v", err)
@@ -26,7 +25,7 @@ func createRandomDataset(t *testing.T) Dataset {
 		UserID:      pgtype.Int4{Int32: userID, Valid: true},
 		Name:        "Test Dataset with CSV",
 		Description: pgtype.Text{String: "A test dataset description", Valid: true},
-		Content:     content, // ذخیره محتوای فایل به صورت بایت
+		Content:     content,
 	}
 
 	dataset, err := testQueries.CreateDataset(context.Background(), arg)
@@ -36,7 +35,7 @@ func createRandomDataset(t *testing.T) Dataset {
 	require.Equal(t, arg.UserID.Int32, dataset.UserID.Int32)
 	require.Equal(t, arg.Name, dataset.Name)
 	require.Equal(t, arg.Description.String, dataset.Description.String)
-	require.Equal(t, arg.Content, dataset.Content) // مقایسه محتوای بایت
+	require.Equal(t, arg.Content, dataset.Content)
 
 	require.NotZero(t, dataset.ID)
 	require.NotZero(t, dataset.UploadedAt)
@@ -52,7 +51,7 @@ func TestCreateDataset(t *testing.T) {
 	}
 	fmt.Println("Current directory:", dir)
 
-	createRandomDataset(t) // تست ایجاد دیتاست با فایل CSV
+	createRandomDataset(t)
 }
 
 func TestGetDatasetByID(t *testing.T) {

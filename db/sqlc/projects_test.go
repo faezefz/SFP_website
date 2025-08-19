@@ -45,7 +45,7 @@ func TestCreateProject(t *testing.T) {
 	require.NotEmpty(t, project)
 }
 
-// تست GetProjectByID
+// Test GetProjectByID
 func TestGetProjectByID(t *testing.T) {
 	user := createRandomUser(t)
 	project1 := createRandomProject(t, user.ID)
@@ -57,7 +57,7 @@ func TestGetProjectByID(t *testing.T) {
 	require.Equal(t, project1.Name, project2.Name)
 }
 
-// تست GetProjectsByOwnerID
+// Test GetProjectsByOwnerID
 func TestGetProjectsByOwnerID(t *testing.T) {
 	user := createRandomUser(t)
 
@@ -75,7 +75,7 @@ func TestGetProjectsByOwnerID(t *testing.T) {
 	}
 }
 
-// تست UpdateProject
+// Test UpdateProject
 func TestUpdateProject(t *testing.T) {
 	user := createRandomUser(t)
 	project1 := createRandomProject(t, user.ID)
@@ -94,7 +94,7 @@ func TestUpdateProject(t *testing.T) {
 	require.Equal(t, arg.Description.String, project2.Description.String)
 }
 
-// تست DeleteProject
+// Test DeleteProject
 func TestDeleteProject(t *testing.T) {
 	user := createRandomUser(t)
 	project := createRandomProject(t, user.ID)
@@ -102,7 +102,6 @@ func TestDeleteProject(t *testing.T) {
 	err := testQueries.DeleteProject(context.Background(), project.ID)
 	require.NoError(t, err)
 
-	// مطمئن شو که پروژه حذف شده
 	project2, err := testQueries.GetProjectByID(context.Background(), project.ID)
 	require.Error(t, err)
 	require.Empty(t, project2)
@@ -112,30 +111,25 @@ func TestProjectDatasets(t *testing.T) {
 	user := createRandomUser(t)
 	project := createRandomProject(t, user.ID)
 
-	// ایجاد دیتاست
 	dataset := createRandomDataset(t)
 
-	// افزودن دیتاست به پروژه
 	err := testQueries.AddDatasetToProject(context.Background(), AddDatasetToProjectParams{
 		ProjectID: project.ID,
 		DatasetID: dataset.ID,
 	})
 	require.NoError(t, err)
 
-	// بررسی گرفتن دیتاست‌ها
 	datasets, err := testQueries.GetDatasetsByProjectID(context.Background(), project.ID)
 	require.NoError(t, err)
 	require.Len(t, datasets, 1)
 	require.Equal(t, dataset.ID, datasets[0].ID)
 
-	// حذف دیتاست از پروژه
 	err = testQueries.RemoveDatasetFromProject(context.Background(), RemoveDatasetFromProjectParams{
 		ProjectID: project.ID,
 		DatasetID: dataset.ID,
 	})
 	require.NoError(t, err)
 
-	// بررسی اینکه بعد از حذف خالی شده
 	datasets, err = testQueries.GetDatasetsByProjectID(context.Background(), project.ID)
 	require.NoError(t, err)
 	require.Len(t, datasets, 0)
@@ -153,20 +147,17 @@ func TestProjectModels(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// بررسی گرفتن مدل‌ها
 	models, err := testQueries.GetModelsByProjectID(context.Background(), project.ID)
 	require.NoError(t, err)
 	require.Len(t, models, 1)
 	require.Equal(t, model.ID, models[0].ID)
 
-	// حذف مدل از پروژه
 	err = testQueries.RemoveModelFromProject(context.Background(), RemoveModelFromProjectParams{
 		ProjectID: project.ID,
 		ModelID:   model.ID,
 	})
 	require.NoError(t, err)
 
-	// بررسی اینکه بعد از حذف خالی شده
 	models, err = testQueries.GetModelsByProjectID(context.Background(), project.ID)
 	require.NoError(t, err)
 	require.Len(t, models, 0)
