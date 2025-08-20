@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -93,7 +92,7 @@ func (s *Server) signup(c *gin.Context) {
 
 	arg := db.CreateUserParams{
 		Email:        req.Email,
-		PasswordHash: string(hashedPassword), // پسورد هش شده را ذخیره می‌کنیم
+		PasswordHash: string(hashedPassword),
 		FullName:     pgtype.Text{String: req.FullName, Valid: req.FullName != ""},
 	}
 
@@ -145,10 +144,6 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 
 // uploadDataset
 func (s *Server) uploadDataset(c *gin.Context) {
-	for key, values := range c.Request.Form {
-		fmt.Printf("%s: %v\n", key, values)
-	}
-
 	file, _, err := c.Request.FormFile("content")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get file"})
@@ -356,7 +351,6 @@ func (s *Server) getDatasetByID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch dataset content"})
 		return
 	}
-	fmt.Println("Content:", content)
 	contentBase64 := base64.StdEncoding.EncodeToString(content)
 
 	c.JSON(http.StatusOK, gin.H{"content": contentBase64})
